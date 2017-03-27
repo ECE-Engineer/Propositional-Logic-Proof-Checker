@@ -1,0 +1,2 @@
+# Propositional-Logic-Proof-Checker
+ Read a natural deduction proof in a restricted form of propositional logic (using only the ‘and’ and ‘if’ connectives, along with single hypotheses per sub-proof) from a file, then output whether the proof is valid or invalid. Validate that each line of the proof is legal; each line should perform some legal inference step, given the rules of inference being used.
