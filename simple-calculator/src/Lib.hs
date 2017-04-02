@@ -1,3 +1,4 @@
+------------------------------------------------------------creating a Parser
 module Lib where
 
 import Text.Parsec
@@ -11,7 +12,7 @@ numberStringParser = many1 digit
 
 numberParser :: Parser Int
 numberParser = fmap read numberStringParser
-
+------------------------------------------------------------parsing operations
 data Operator = Add | Subtract
   deriving (Show)
 
@@ -30,7 +31,7 @@ operatorStringParser = addParser <|> subtractParser
 
 operatorParser :: Parser Operator
 operatorParser = fmap readOperator operatorStringParser
-
+------------------------------------------------------------parsing expressions
 data Expression = Literal Int | Operation Expression Operator Expression
   deriving (Show)
 
