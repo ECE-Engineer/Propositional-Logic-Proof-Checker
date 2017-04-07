@@ -61,6 +61,7 @@ exprParser = try (fmap Expr1 conditionalExprParser) <|> try (fmap Expr2 conjunct
 
 ---create a parser for the <conjunction-elim-rule>
 data ConjunctionElimRule = ConjunctionElimRule Expr Int
+  deriving (Show)
 
 conjunctionElimRuleParser :: Parser ConjunctionElimRule
 
@@ -74,6 +75,7 @@ conjunctionElimRuleParser = do
 
 ---create a parser for the <conjunction-intro-rule>
 data ConjunctionIntroRule = ConjunctionIntroRule ConjunctionExpr Int Int
+  deriving (Show)
 
 conjunctionIntroRuleParser :: Parser ConjunctionIntroRule
 
@@ -89,6 +91,7 @@ conjunctionIntroRuleParser = do
 
 ---create a parser for the <conditional-elim-rule>
 data ConditionalElimRule = ConditionalElimRule Expr Int Int
+  deriving (Show)
 
 conditionalElimRuleParser :: Parser ConditionalElimRule
 
@@ -104,6 +107,7 @@ conditionalElimRuleParser = do
 
 ---create a parser for the <conditional-intro-rule>
 data ConditionalIntroRule = ConditionalIntroRule ConditionalExpr
+  deriving (Show)
 
 conditionalIntroRuleParser :: Parser ConditionalIntroRule
 
@@ -121,8 +125,8 @@ data NonDischargeRule = NonDischargeRule1 ConditionalElimRule
 
 nonDischargeRuleParser :: Parser NonDischargeRule
 
-conditionalIntroRuleParser = do
+nonDischargeRuleParser = do
   _         <- string "("
   expr1  <- try (fmap NonDischargeRule1 conditionalElimRuleParser) <|> try (fmap NonDischargeRule2 conjunctionIntroRuleParser) <|> try (fmap NonDischargeRule3 conjunctionElimRuleParser)
   _         <- string ")"
-  return (expr1)-----------------------------------------------------------------INCORRECT----
+  return (expr1)
