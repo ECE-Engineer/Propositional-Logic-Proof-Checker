@@ -166,8 +166,8 @@ derivationLineParser = do
   _         <- newline
   num1  <- numberParser
   _         <- spaces
-  expr1  <- try subproofParser <|> try nonDischargeRuleParser
-  return (try (fmap DerivationLine1 num1 expr1) <|> try (fmap DerivationLine2 num1 expr1))
+  expr1  <- try (fmap (DerivationLine1 num1) subproofParser) <|> try (fmap (DerivationLine2 num1) nonDischargeRuleParser)
+  return (expr1)
 
 ---create a parser for the <subproof>
 data Subproof = Subproof DischargeRule Hypothesis [DerivationLine]
