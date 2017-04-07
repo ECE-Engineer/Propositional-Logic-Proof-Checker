@@ -130,3 +130,70 @@ nonDischargeRuleParser = do
   expr1  <- try (fmap NonDischargeRule1 conditionalElimRuleParser) <|> try (fmap NonDischargeRule2 conjunctionIntroRuleParser) <|> try (fmap NonDischargeRule3 conjunctionElimRuleParser)
   _         <- string ")"
   return (expr1)
+
+---create a parser for the <discharge-rule>
+data DischargeRule = DischargeRule ConditionalIntroRule
+  deriving (Show)
+
+dischargeRuleParser :: Parser DischargeRule
+dischargeRuleParser = fmap DischargeRule conditionalIntroRuleParser
+
+---create a parser for the <hypothesis>
+data Hypothesis = Hypothesis Int Expr
+  deriving (Show)
+
+hypothesisParser :: Parser Hypothesis
+
+hypothesisParser = do
+  _         <- newline
+  num1  <- numberParser
+  _         <- spaces
+  _         <- string "("
+  _         <- string "hyp"
+  _         <- spaces
+  expr1  <- exprParser
+  _         <- string ")"
+  return (Hypothesis num1 expr1)
+
+---create a parser for the <derivation-line>
+data DerivationLine = DerivationLine1 Int Subproof
+                    | DerivationLine2 Int NonDischargeRule
+  deriving (Show)
+
+derivationLineParser :: Parser DerivationLine
+
+derivationLineParser = do
+  _         <- newline
+  num1  <- numberParser
+  _         <- spaces
+  expr1  <- try (fmap DerivationLine1 num1 subproofParser) <|> try (fmap DerivationLine2 num1 nonDischargeRuleParser)
+  return (expr1)
+
+---create a parser for the <subproof>
+data Subproof = Subproof DischargeRule Hypothesis [DerivationLine]
+  deriving (Show)
+
+subproofParser :: Parser Subproof
+
+subproofParser = do
+  _         <- string "("
+  expr1  <- dischargeRuleParser
+  _         <- newline
+  _         <- string "("
+  _         <- string "proof"
+  expr2  <- hypothesisParser
+  list1  <- many1 derivationLineParser
+  _         <- string ")"
+  _         <- string ")"
+  return (Subproof expr1 expr2 list1)
+
+---create a parser for the <proof>
+data Proof = Proof Int Subproof
+
+proofParser :: Parser Proof
+
+proofParser = do
+  num1  <- numberParser
+  _         <- spaces
+  expr1  <- subproofParser
+  return (Proof num1 expr1)
