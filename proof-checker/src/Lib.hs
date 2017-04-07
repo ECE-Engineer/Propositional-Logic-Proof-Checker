@@ -7,21 +7,19 @@ someFunc :: IO ()
 someFunc = putStrLn "someFunc"
 
 ---create a parser for the <number>
-Number :: Parser String
-Number = many1 digit
+numberStringParser :: Parser String
+numberStringParser = many1 digit
 
 numberParser :: Parser Int
-numberParser = fmap read Number
+numberParser = fmap read numberStringParser
 
 ---create a parser for the <const-expr>
-Letter :: Parser Char
-Letter = upper
-
-letterParser :: Parser Char
-letterParser = fmap read Letter
+letterStringParser :: Parser Char
+letterStringParser = upper
 
 ---create a parser for the <conjunction-expr>
 data ConjunctionExpr = ConjunctionExpr Expr Expr
+  deriving (Show)
 
 conjunctionExprParser :: Parser ConjunctionExpr
 
@@ -29,14 +27,15 @@ conjunctionExprParser = do
   _         <- string "("
   _         <- string "and"
   _         <- spaces
-  expr1  <- conjunctionExprParser
+  expr1  <- exprParser
   _         <- spaces
-  expr2  <- conjunctionExprParser
+  expr2  <- exprParser
   _         <- string ")"
   return (ConjunctionExpr expr1 expr2)
 
 ---create a parser for the <conditional-expr>
 data ConditionalExpr = ConditionalExpr Expr Expr
+  deriving (Show)
 
 conditionalExprParser :: Parser ConditionalExpr
 
@@ -44,20 +43,24 @@ conditionalExprParser = do
   _         <- string "("
   _         <- string "if"
   _         <- spaces
-  expr1  <- conditionalExprParser
+  expr1  <- exprParser
   _         <- spaces
-  expr2  <- conditionalExprParser
+  expr2  <- exprParser
   _         <- string ")"
   return (ConditionalExpr expr1 expr2)
 
 ---create a parser for the <expr>
-data Expr = ConditionalExpr | ConjunctionExpr | Letter
+data Expr = Expr1 ConditionalExpr
+          | Expr2 ConjunctionExpr
+          | Expr3 Char
   deriving (Show)
 
 exprParser :: Parser Expr
 
+exprParser = try (fmap Expr1 conditionalExprParser) <|> try (fmap Expr2 conjunctionExprParser) <|> try (fmap Expr3 letterStringParser)
+
 ---create a parser for the <conjunction-elim-rule>
-data ConjunctionElimRule = ConjunctionElimRule Expr Number
+data ConjunctionElimRule = ConjunctionElimRule Expr Int
 
 conjunctionElimRuleParser :: Parser ConjunctionElimRule
 
@@ -70,7 +73,7 @@ conjunctionElimRuleParser = do
   return (ConjunctionElimRule expr1 num1)
 
 ---create a parser for the <conjunction-intro-rule>
-data ConjunctionIntroRule = ConjunctionIntroRule ConjunctionExpr Number Number
+data ConjunctionIntroRule = ConjunctionIntroRule ConjunctionExpr Int Int
 
 conjunctionIntroRuleParser :: Parser ConjunctionIntroRule
 
@@ -85,7 +88,7 @@ conjunctionIntroRuleParser = do
   return (ConjunctionIntroRule expr1 num1 num2)
 
 ---create a parser for the <conditional-elim-rule>
-data ConditionalElimRule = ConditionalElimRule Expr Number Number
+data ConditionalElimRule = ConditionalElimRule Expr Int Int
 
 conditionalElimRuleParser :: Parser ConditionalElimRule
 
@@ -111,75 +114,15 @@ conditionalIntroRuleParser = do
   return (ConditionalIntroRule expr1)
 
 ---create a parser for the <non-discharge-rule>
-data NonDischargeRule = ConditionalElimRule | ConjunctionIntroRule | ConjunctionElimRule
+data NonDischargeRule = NonDischargeRule1 ConditionalElimRule
+                      | NonDischargeRule2 ConjunctionIntroRule
+					  | NonDischargeRule3 ConjunctionElimRule
   deriving (Show)
 
 nonDischargeRuleParser :: Parser NonDischargeRule
 
 conditionalIntroRuleParser = do
   _         <- string "("
-  expr1  <- nonDischargeRuleParser
+  expr1  <- try (fmap NonDischargeRule1 conditionalElimRuleParser) <|> try (fmap NonDischargeRule2 conjunctionIntroRuleParser) <|> try (fmap NonDischargeRule3 conjunctionElimRuleParser)
   _         <- string ")"
-  return (NonDischargeRule expr1)
-
----create a parser for the <discharge-rule>
-data DischargeRule = ConditionalIntroRule
-  deriving (Show)
-
-dischargeRuleParser :: Parser DischargeRule
-
----create a parser for the <hypothesis>
-data Hypothesis = Hypothesis Number Expr
-
-hypothesisParser :: Parser Hypothesis
-
-hypothesisParser = do
-  _         <- newline
-  num1  <- numberParser
-  _         <- spaces
-  _         <- string "("
-  _         <- string "hyp"
-  _         <- spaces
-  expr1  <- exprParser
-  _         <- string ")"
-  return (Hypothesis num1 expr1)
-
----create a parser for the <derivation-line>
-data DerivationLine = DerivationLine Number Subproof
-                    | DerivationLine Number NonDischargeRule
-
-derivationLineParser :: Parser DerivationLine
-
-derivationLineParser = do
-  _         <- newline
-  num1  <- numberParser
-  _         <- spaces
-  expr1  <- try subproofParser <|> try nonDischargeRuleParser
-  return (DerivationLine num1 expr1)
-
----create a parser for the <subproof>
-data Subproof = Subproof DischargeRule Hypothesis [DerivationLine]
-
-subproofParser :: Parser Subproof
-
-subproofParser = do
-  _         <- string "("
-  expr1  <- dischargeRuleParser
-  _         <- newline
-  _         <- string "("
-  _         <- string "proof"
-  list1  <- many1 derivationLineParser
-  _         <- string ")"
-  _         <- string ")"
-  return (Subproof expr1 list1)
-
----create a parser for the <proof>
-data Proof = Proof Number Subproof
-
-proofParser :: Parser Proof
-
-proofParser = do
-  num1  <- numberParser
-  _         <- spaces
-  expr1  <- subproofParser
-  return (Proof num1 expr1)
+  return (expr1)-----------------------------------------------------------------INCORRECT----
