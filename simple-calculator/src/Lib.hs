@@ -6,7 +6,6 @@ import Text.Parsec.String (Parser)
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
-
 numberStringParser :: Parser String
 numberStringParser = many1 digit
 
@@ -15,7 +14,7 @@ numberParser = fmap read numberStringParser
 ------------------------------------------------------------parsing operations
 data Operator = Add | Subtract
   deriving (Show)
-
+-------------------------------------
 readOperator :: String -> Operator
 readOperator "+" = Add
 readOperator "-" = Subtract
