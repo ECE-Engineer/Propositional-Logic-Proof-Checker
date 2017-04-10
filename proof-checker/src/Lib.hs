@@ -1,10 +1,58 @@
+-- @Author Kyle Zeller
+-- @Author Zach Sabin
+
 module Lib where
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
+import System.IO  
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+----------------------------------------------------
+-- Main Functions -----------------------------------
+----------------------------------------------------
+
+data Result = Result {success :: Bool, message :: String} deriving (Show)
+
+-- Reads in a file containing a proof, parses the proof, and returns whether or not the proof was valid
+main = do  
+    putStr "Enter a fileName: "
+    fileName <- getLine 
+    proofString <- readFile fileName 
+    let result = checkProof (parse proofParser "" proofString)
+    putStrLn (message result)
+    if (success result)
+      then putStrLn "-- Proof is valid --"
+      else putStrLn "-- Proof is invalid --"
+
+checkProof :: Either ParseError DerivationTree -> Result
+checkProof (Right proof) = Result (validateProof proof) "Parse completed successfully"
+checkProof (Left error) = Result False ("Parse error: " ++ (show error))
+
+----------------------------------------------------
+-- Data Structures ---------------------------------
+----------------------------------------------------
+
+data Operator = If | And deriving (Eq, Show)
+
+data ExprTree = Const { val :: [Char] } 
+    | Expr  { op :: Operator, 
+            arg1 :: ExprTree, 
+            arg2 :: ExprTree } deriving (Eq, Show) 
+
+data NDRule = CondElim | ConjIntro | ConjElim deriving (Eq, Show)
+
+data DerivationTree =
+    Proof { condIntro :: ExprTree, 
+          hyp :: ExprTree, 
+          derivations :: [DerivationTree] }
+    | DerivationLine { rule :: NDRule,
+            statement :: ExprTree, 
+            lines :: [Int] } deriving (Show)
+
+
+----------------------------------------------------
+-- Parser Functions --------------------------------
+----------------------------------------------------
 
 ---create a parser for the <number>
 numberStringParser :: Parser String
@@ -14,15 +62,13 @@ numberParser :: Parser Int
 numberParser = fmap read numberStringParser
 
 ---create a parser for the <const-expr>
-letterStringParser :: Parser Char
-letterStringParser = upper
+constParser :: Parser ExprTree
+constParser = do 
+    exp <- (many (noneOf "() "))
+    return (Const exp)
 
 ---create a parser for the <conjunction-expr>
-data ConjunctionExpr = ConjunctionExpr Expr Expr
-  deriving (Show)
-
-conjunctionExprParser :: Parser ConjunctionExpr
-
+conjunctionExprParser :: Parser ExprTree
 conjunctionExprParser = do
   _         <- string "("
   _         <- string "and"
@@ -31,14 +77,10 @@ conjunctionExprParser = do
   _         <- spaces
   expr2  <- exprParser
   _         <- string ")"
-  return (ConjunctionExpr expr1 expr2)
+  return (Expr And expr1 expr2)
 
 ---create a parser for the <conditional-expr>
-data ConditionalExpr = ConditionalExpr Expr Expr
-  deriving (Show)
-
-conditionalExprParser :: Parser ConditionalExpr
-
+conditionalExprParser :: Parser ExprTree
 conditionalExprParser = do
   _         <- string "("
   _         <- string "if"
@@ -47,54 +89,24 @@ conditionalExprParser = do
   _         <- spaces
   expr2  <- exprParser
   _         <- string ")"
-  return (ConditionalExpr expr1 expr2)
+  return (Expr If expr1 expr2)
 
 ---create a parser for the <expr>
-data Expr = Expr1 ConditionalExpr
-          | Expr2 ConjunctionExpr
-          | Expr3 Char
-  deriving (Show)
-
-exprParser :: Parser Expr
-
-exprParser = try (fmap Expr1 conditionalExprParser) <|> try (fmap Expr2 conjunctionExprParser) <|> try (fmap Expr3 letterStringParser)
+exprParser :: Parser ExprTree
+exprParser = (try conditionalExprParser) <|> (try conjunctionExprParser) <|> constParser
 
 ---create a parser for the <conjunction-elim-rule>
-data ConjunctionElimRule = ConjunctionElimRule Expr Int
-  deriving (Show)
-
-conjunctionElimRuleParser :: Parser ConjunctionElimRule
-
+conjunctionElimRuleParser :: Parser DerivationTree
 conjunctionElimRuleParser = do
   _         <- string "&E"
   _         <- spaces
   expr1  <- exprParser
   _         <- spaces
   num1  <- numberParser
-  return (ConjunctionElimRule expr1 num1)
-
----create a parser for the <conjunction-intro-rule>
-data ConjunctionIntroRule = ConjunctionIntroRule ConjunctionExpr Int Int
-  deriving (Show)
-
-conjunctionIntroRuleParser :: Parser ConjunctionIntroRule
-
-conjunctionIntroRuleParser = do
-  _         <- string "&I"
-  _         <- spaces
-  expr1  <- conjunctionExprParser
-  _         <- spaces
-  num1  <- numberParser
-  _         <- spaces
-  num2  <- numberParser
-  return (ConjunctionIntroRule expr1 num1 num2)
+  return (DerivationLine ConjElim expr1 [num1])
 
 ---create a parser for the <conditional-elim-rule>
-data ConditionalElimRule = ConditionalElimRule Expr Int Int
-  deriving (Show)
-
-conditionalElimRuleParser :: Parser ConditionalElimRule
-
+conditionalElimRuleParser :: Parser DerivationTree
 conditionalElimRuleParser = do
   _         <- string "->E"
   _         <- spaces
@@ -103,47 +115,36 @@ conditionalElimRuleParser = do
   num1  <- numberParser
   _         <- spaces
   num2  <- numberParser
-  return (ConditionalElimRule expr1 num1 num2)
+  return (DerivationLine CondElim expr1 [num1, num2])
 
----create a parser for the <conditional-intro-rule>
-data ConditionalIntroRule = ConditionalIntroRule ConditionalExpr
-  deriving (Show)
-
-conditionalIntroRuleParser :: Parser ConditionalIntroRule
-
-conditionalIntroRuleParser = do
-  _         <- string "->I"
+---create a parser for the <conjunction-intro-rule>
+conjunctionIntroRuleParser :: Parser DerivationTree
+conjunctionIntroRuleParser = do
+  _         <- string "&I"
   _         <- spaces
-  expr1  <- conditionalExprParser
-  return (ConditionalIntroRule expr1)
+  expr1  <- conjunctionExprParser
+  _         <- spaces
+  num1  <- numberParser
+  _         <- spaces
+  num2  <- numberParser
+  return (DerivationLine ConjIntro expr1 [num1, num2])
 
----create a parser for the <non-discharge-rule>
-data NonDischargeRule = NonDischargeRule1 ConditionalElimRule
-                      | NonDischargeRule2 ConjunctionIntroRule
-					  | NonDischargeRule3 ConjunctionElimRule
-  deriving (Show)
-
-nonDischargeRuleParser :: Parser NonDischargeRule
-
+nonDischargeRuleParser :: Parser DerivationTree
 nonDischargeRuleParser = do
   _         <- string "("
-  expr1  <- try (fmap NonDischargeRule1 conditionalElimRuleParser) <|> try (fmap NonDischargeRule2 conjunctionIntroRuleParser) <|> try (fmap NonDischargeRule3 conjunctionElimRuleParser)
+  expr1  <- (try conditionalElimRuleParser) <|> (try conjunctionIntroRuleParser) <|> conjunctionElimRuleParser
   _         <- string ")"
   return (expr1)
 
----create a parser for the <discharge-rule>
-data DischargeRule = DischargeRule ConditionalIntroRule
-  deriving (Show)
-
-dischargeRuleParser :: Parser DischargeRule
-dischargeRuleParser = fmap DischargeRule conditionalIntroRuleParser
+dischargeRuleParser :: Parser ExprTree
+dischargeRuleParser = do
+  _         <- string "->I"
+  _         <- spaces
+  expr1  <- conditionalExprParser
+  return (expr1)
 
 ---create a parser for the <hypothesis>
-data Hypothesis = Hypothesis Int Expr
-  deriving (Show)
-
-hypothesisParser :: Parser Hypothesis
-
+hypothesisParser :: Parser ExprTree
 hypothesisParser = do
   _         <- newline
   num1  <- numberParser
@@ -153,48 +154,82 @@ hypothesisParser = do
   _         <- spaces
   expr1  <- exprParser
   _         <- string ")"
-  return (Hypothesis num1 expr1)
+  return (expr1)
 
 ---create a parser for the <derivation-line>
-data DerivationLine = DerivationLine1 Int Subproof
-                    | DerivationLine2 Int NonDischargeRule
-  deriving (Show)
-
-derivationLineParser :: Parser DerivationLine
-
+derivationLineParser :: Parser DerivationTree
 derivationLineParser = do
   _         <- newline
   num1  <- numberParser
   _         <- spaces
-  expr1  <- try (fmap (DerivationLine1 num1) subproofParser) <|> try (fmap (DerivationLine2 num1) nonDischargeRuleParser)
+  expr1  <- (try subproofParser) <|> nonDischargeRuleParser
   return (expr1)
 
 ---create a parser for the <subproof>
-data Subproof = Subproof DischargeRule Hypothesis [DerivationLine]
-  deriving (Show)
-
-subproofParser :: Parser Subproof
-
+subproofParser :: Parser DerivationTree
 subproofParser = do
   _         <- string "("
   expr1  <- dischargeRuleParser
   _         <- newline
   _         <- string "("
   _         <- string "proof"
-  expr2  <- hypothesisParser
+  hyp    <- hypothesisParser
   list1  <- many1 derivationLineParser
   _         <- string ")"
   _         <- string ")"
-  return (Subproof expr1 expr2 list1)
+  return (Proof expr1 hyp list1)
 
 ---create a parser for the <proof>
-data Proof = Proof Int Subproof
-  deriving (Show)
-
-proofParser :: Parser Proof
-
+proofParser :: Parser DerivationTree
 proofParser = do
   num1  <- numberParser
   _         <- spaces
-  expr1  <- subproofParser
-  return (Proof num1 expr1)
+  subproof  <- subproofParser
+  return (subproof)
+
+-----------------------------------------------------------------------------
+-- Proof Validation Functions -----------------------------------------------
+-----------------------------------------------------------------------------
+
+validateProof :: DerivationTree -> Bool
+validateProof proof = validateDerivationLine (buildExprList [] [proof]) proof
+
+validateDerivationLine :: [ExprTree] -> DerivationTree -> Bool
+validateDerivationLine exprList (Proof intro hyp derivations) = (validateCondIntro intro hyp derivations) && (validateDerivationList exprList derivations)
+validateDerivationLine exprList (DerivationLine rule statement lines) = validateNDRule rule statement (getExpressions exprList lines)
+
+validateDerivationList :: [ExprTree] -> [DerivationTree] -> Bool
+validateDerivationList exprList (x:xs) = (validateDerivationLine exprList x) && (validateDerivationList exprList xs)
+validateDerivationList _ [] = True
+
+-- CondIntro: If you have hypothesized P at the beginning of a (proof or) subproof, and in that subproof have derived Q, 
+-- then you may leave that subproof and state that P -> Q.
+validateCondIntro :: ExprTree -> ExprTree -> [DerivationTree] -> Bool
+validateCondIntro (Expr If p q) hyp derivations = (p == hyp) && (derivesExpr derivations q)
+validateCondIntro expr hyp derivations = False
+
+-- CondElim: If both P->Q and P are True, then Q is True.
+-- ConjIntro: If both P and Q are True, then P & Q is True.
+-- ConjElim: If P & Q is True, then P is True. If P & Q is True, then Q is True.
+validateNDRule :: NDRule -> ExprTree -> [ExprTree] -> Bool
+validateNDRule CondElim q1 [(Expr If p2 q2), p1] = (p1 == p2) && (q1 == q2) 
+validateNDRule ConjIntro (Expr And p2 q2) [p1, q1] = ((p1 == p2) && (q1 == q2)) || ((p1 == q2) && (q1 == p2))
+validateNDRule ConjElim x [(Expr And p q)] = (x == p) || (x == q)
+validateNDRule _ _ _ = False
+
+derivesExpr :: [DerivationTree] -> ExprTree -> Bool
+derivesExpr ((Proof intro _ derivations):xs) expr = intro == expr || (derivesExpr derivations expr) || (derivesExpr xs expr)
+derivesExpr ((DerivationLine _ statement _):xs) expr = statement == expr || (derivesExpr xs expr)
+derivesExpr [] _ = False
+
+buildExprList :: [ExprTree] -> [DerivationTree] -> [ExprTree]
+buildExprList list (x:xs) = buildExprList (list ++ (toExpr x)) xs
+buildExprList list [] = list
+
+toExpr :: DerivationTree -> [ExprTree]
+toExpr (Proof intro hyp derivations) = (buildExprList [intro, hyp] derivations)
+toExpr (DerivationLine _ statement _) = [statement]
+
+getExpressions :: [ExprTree] -> [Int] -> [ExprTree]
+getExpressions exprList (x:xs) = (exprList !! (x - 1)):(getExpressions exprList xs)
+getExpressions exprList [] = []
